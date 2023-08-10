@@ -5,6 +5,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ForceRe
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from secret import token
 from factions import FACTIONS  # Assuming FACTIONS contains the races data
+from PIL import Image, ImageDraw, ImageFont
+import tempfile
+
+
+icon_width = 100
+icon_height = 100
 
 # Enabling logging for debugging purposes
 logging.basicConfig(
@@ -53,32 +59,53 @@ def divide_groups():
     random.shuffle(players)
     groups = [players[i:i + MAX_PLAYERS] for i in range(0, len(players), MAX_PLAYERS)]
 
-# Command to randomize races and allow users to select their race
-async def randomize_races(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+async def randomize_factions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_admin(update.effective_user.username):
-        await update.message.reply_text("Only the admin can randomize races.")
+        await update.message.reply_text("Only the admin can randomize factions.")
         return
-    
-    global available_races
-    available_races = FACTIONS.copy()
+
+    global available_factions
+    available_factions = FACTIONS.copy()
     divide_groups()
 
     for group in groups:
         for player in group:
-            choices = random.sample(available_races, 4)
-            # Remove the chosen races from available_races
-            available_races = [race for race in available_races if race not in choices]
+            choices = random.sample(available_factions, MAX_FACTIONS_TO_SELECT)
+            # Remove the chosen factions from available_factions
+            available_factions = [faction for faction in available_factions if faction not in choices]
 
-            # Create the message text with the full names of the races
-            message_text = "Choose your race:\n"
-            for i, race in enumerate(choices):
-                message_text += f"{i + 1}. {race['name']}\n"
+            # Create a new image to combine all the faction icons
+            combined_image = Image.new('RGB', (icon_width * len(choices), icon_height))
+            draw = ImageDraw.Draw(combined_image)
+            font = ImageFont.load_default()
 
-            # Create the keyboard with buttons containing numbers corresponding to the races
-            keyboard = [[InlineKeyboardButton(str(i + 1), callback_data=f'{player["username"]}:{race["name"]}') for i, race in enumerate(choices)]]
+            # Add the faction icons and numbers to the combined image
+            for i, faction in enumerate(choices):
+                icon_path = faction['icon']
+                with Image.open(icon_path) as icon:
+                    combined_image.paste(icon, (i * 100, 0))
+
+                draw.text((i * icon_width + 10, 10), str(i + 1), font=font, fill='white')
+
+
+            # Save the combined image to a temporary file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            combined_image.save(temp_file.name)
+
+            # Send the combined image to the corresponding player
+            await context.bot.send_photo(chat_id=player['user_id'], photo=open(temp_file.name, 'rb'))
+
+            # Create the message text
+            message_text = "Choose your faction:\n"
+            for i, faction in enumerate(choices):
+                message_text += f"{i + 1}. {faction['name']}\n"
+
+            # Create the keyboard with buttons containing numbers corresponding to the factions
+            keyboard = [[InlineKeyboardButton(str(i + 1), callback_data=f'{player["username"]}:{faction["name"]}') for i, faction in enumerate(choices)]]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            # Send the message to the corresponding player
+            # Send the message with the inline keyboard
             await context.bot.send_message(chat_id=player['user_id'], text=message_text, reply_markup=reply_markup)
 
 # Function to handle button clicks for race selection
@@ -117,7 +144,7 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("join", join))
-    application.add_handler(CommandHandler("randomize", randomize_races))
+    application.add_handler(CommandHandler("randomize", randomize_factions))
     application.add_handler(CommandHandler("results", results))
     application.add_handler(CallbackQueryHandler(button))
 
