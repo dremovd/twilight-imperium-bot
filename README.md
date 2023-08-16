@@ -20,9 +20,7 @@ A Telegram bot to assist in organizing and randomizing factions for the board ga
 
 3. Make sure to place your Telegram bot token in a file named `secret.py` with the variable `token`.
 
-4. Place the cached icons of factions in the same directory as the source code or modify the code to fetch the icons from URLs.
-
-5. Run the bot:
+4. Run the bot:
 
    ```bash
    python bot.py
